@@ -1,0 +1,352 @@
+---
+title: "STT 301 - Final Project"
+author: "Aaron Roach, James Hao, Jiaxi You, Ziyi Chen"
+date: "December 7, 2018"
+output: html_document
+---
+
+We chose to do Project 6 - Classification. We take a large, data set with 1460 rows and 80 columns. This means 79 predictors. We will be using a Housing Data set. It has 79 predictors that are used to predict SalePrice. The SalePrice is originally a quantitative variable, but we separate these into classes.
+
+#### Reading in the Data (requires train.csv from Kaggle)
+
+Note: requires "train.csv"" from Kaggle. Here is the link: https://www.kaggle.com/c/house-prices-advanced-regression-techniques/data
+
+```{r}
+housing_data <- read.csv("train.csv")
+str(housing_data)
+```
+
+In the above code, we see some NA values appear. It initially seems some data is missing.
+
+### Data Processing
+
+Upon viewing the data.description.txt at the same link, we find that some of the NA's are actually real information. For example, in the variable "Alley", NA corresponds to "No Alley Access". It is saying that there is no alley adjacent to the property. Clearly this data requires some cleaning. So we do this below. First we find all columns with NA values in them, and put in appropriate replacements. 
+
+```{r}
+# Finding out where the NA's are
+na.values1 <- colSums(is.na(housing_data))
+na.values1[na.values1 != 0]
+
+### Now we know where all of the NA values are, so we can start fixing them
+
+# LotFrontage
+# This column has a lot of NA values and the data description text 
+# doesn't indicate what the should be, so we will store each NA as the mean
+mean_LotFrontage <- mean(housing_data$LotFrontage, na.rm = TRUE)
+housing_data$LotFrontage <- as.character(housing_data$LotFrontage)
+housing_data$LotFrontage[is.na(housing_data$LotFrontage)] <- mean_LotFrontage
+housing_data$LotFrontage <- as.double(housing_data$LotFrontage)
+
+# Alley
+# NA means "No Alley" in this case
+housing_data$Alley <- as.character(housing_data$Alley)
+housing_data$Alley[is.na(housing_data$Alley)] <- "None"
+housing_data$Alley <- as.factor(housing_data$Alley)
+
+# MasVnrType
+# NA most likely corresponds to "None"
+# Also "None" is the mode of the column
+housing_data$MasVnrType <- as.character(housing_data$MasVnrType)
+housing_data$MasVnrType[is.na(housing_data$MasVnrType)] <- "None"
+housing_data$MasVnrType <- as.factor(housing_data$MasVnrType)
+
+# MasVnrArea
+# MasVnrType = "None" => MasVnrArea = 0
+housing_data$MasVnrArea <- as.character(housing_data$MasVnrArea)
+housing_data$MasVnrArea[is.na(housing_data$MasVnrArea)] <- 0
+housing_data$MasVnrArea <- as.double(housing_data$MasVnrArea)
+
+# BsmtQual
+# NA means no basement
+housing_data$BsmtQual <- as.character(housing_data$BsmtQual)
+housing_data$BsmtQual[is.na(housing_data$BsmtQual)] <- "None"
+housing_data$BsmtQual <- as.factor(housing_data$BsmtQual)
+
+# BsmtCond 
+# NA means no basement
+housing_data$BsmtCond <- as.character(housing_data$BsmtCond)
+housing_data$BsmtCond[is.na(housing_data$BsmtCond)] <- "None"
+housing_data$BsmtCond <- as.factor(housing_data$BsmtCond)
+
+# BsmtExposure
+# NA means no basement
+housing_data$BsmtExposure <- as.character(housing_data$BsmtExposure)
+housing_data$BsmtExposure[is.na(housing_data$BsmtExposure)] <- "None"
+housing_data$BsmtExposure <- as.factor(housing_data$BsmtExposure)
+
+# BsmtFinType1
+# NA means no basement
+housing_data$BsmtFinType1 <- as.character(housing_data$BsmtFinType1)
+housing_data$BsmtFinType1[is.na(housing_data$BsmtFinType1)] <- "None"
+housing_data$BsmtFinType1 <- as.factor(housing_data$BsmtFinType1)
+
+# BsmtFinType2
+# NA means no basement
+housing_data$BsmtFinType2 <- as.character(housing_data$BsmtFinType2)
+housing_data$BsmtFinType2[is.na(housing_data$BsmtFinType2)] <- "None"
+housing_data$BsmtFinType2 <- as.factor(housing_data$BsmtFinType2)
+
+# Electrical
+# Store as the mode (Sbrkr)
+summary(housing_data$Electrical)
+housing_data$Electrical <- as.character(housing_data$Electrical)
+housing_data$Electrical[is.na(housing_data$Electrical)] <- "SBrkr"
+housing_data$Electrical <- as.factor(housing_data$Electrical)
+
+# FireplaceQu 
+# NA means no fireplace
+housing_data$FireplaceQu <- as.character(housing_data$FireplaceQu)
+housing_data$FireplaceQu[is.na(housing_data$FireplaceQu)] <- "None"
+housing_data$FireplaceQu <- as.factor(housing_data$FireplaceQu)
+
+# Fixing GarageType
+# NA means no garage
+housing_data$GarageType <- as.character(housing_data$GarageType)
+housing_data$GarageType[is.na(housing_data$GarageType)] <- "None"
+housing_data$GarageType <- as.factor(housing_data$GarageType)
+
+# GarageYrBlt
+# NA means no garage, store as mean
+mean_yr <- mean(housing_data$GarageYrBlt, na.rm = TRUE)
+housing_data$GarageYrBlt <- as.character(housing_data$GarageYrBlt)
+housing_data$GarageYrBlt[is.na(housing_data$GarageYrBlt)] <- mean_yr
+housing_data$GarageYrBlt <- as.double(housing_data$GarageYrBlt)
+
+# GarageFinish
+# NA means no garage
+housing_data$GarageFinish <- as.character(housing_data$GarageFinish)
+housing_data$GarageFinish[is.na(housing_data$GarageFinish)] <- "None"
+housing_data$GarageFinish <- as.factor(housing_data$GarageFinish)
+
+# GarageQual
+# NA means no garage
+housing_data$GarageQual <- as.character(housing_data$GarageQual)
+housing_data$GarageQual[is.na(housing_data$GarageQual)] <- "None"
+housing_data$GarageQual <- as.factor(housing_data$GarageQual)
+
+# GarageCond 
+# NA means no garage
+housing_data$GarageCond <- as.character(housing_data$GarageCond)
+housing_data$GarageCond[is.na(housing_data$GarageCond)] <- "None"
+housing_data$GarageCond <- as.factor(housing_data$GarageCond)
+
+# PoolQC
+# NA means no pool
+housing_data$PoolQC <- as.character(housing_data$PoolQC)
+housing_data$PoolQC[is.na(housing_data$PoolQC)] <- "None"
+housing_data$PoolQC <- as.factor(housing_data$PoolQC)
+
+# Fence
+# NA means no fence
+housing_data$Fence <- as.character(housing_data$Fence)
+housing_data$Fence[is.na(housing_data$Fence)] <- "None"
+housing_data$Fence <- as.factor(housing_data$Fence)
+
+# MiscFeature 
+# NA means None
+housing_data$MiscFeature <- as.character(housing_data$MiscFeature)
+housing_data$MiscFeature[is.na(housing_data$MiscFeature)] <- "None"
+housing_data$MiscFeature <- as.factor(housing_data$MiscFeature)
+
+# All of the NA's are gone! So now we have workable clean data
+sum(is.na(housing_data))
+```
+
+Further investigation of the data will lead to one discovering that MSSubClass and MoSold, although their values are numeric, are Factors. We fix them in the code below.
+
+```{r}
+# MSSubClass is a factor
+housing_data$MSSubClass <- as.factor(housing_data$MSSubClass)
+
+# MoSold is a factor
+housing_data$MoSold <- as.factor(housing_data$MoSold)
+```
+
+#### Turning this into a Classification Problem
+
+Instead of making a model to predict actual SalePrice, we make a model to predict which interval a SalePrice will be in. Our classes will be made up from the summary of housing_data$SalePrice. They are shown below.
+
+We also turn the data into a model matrix so we can later do KNN (cannot compute distance with categorical data, so we change them to "dummy variables") 
+
+```{r}
+summary(housing_data$SalePrice)
+
+#### Class 1: (0,129975)
+#### Class 2: (129975,163000)
+#### Class 3: (163000,214000)
+#### Class 4: (214000,Inf)
+
+housing_data$SalePrice[housing_data$SalePrice<=129975] <- 1
+housing_data$SalePrice[129975<= housing_data$SalePrice & housing_data$SalePrice<=163000] <- 2
+housing_data$SalePrice[163000 <= housing_data$SalePrice & housing_data$SalePrice<=214000] <- 3
+housing_data$SalePrice[housing_data$SalePrice>= 214000] <- 4
+
+modelmatrix <- model.matrix(Id ~ ., data = housing_data)
+```
+
+#### Further Analysis of the Data and Summary Statistics
+
+We notice that, by our design, SalePrice is split almost evenly into four factors now. Our plan is to use each of the 79 variables as a predictor for the SalePrice class. With the help of ggplot2, we can get an idea of which models will be best.
+
+```{r}
+summary(as.factor(housing_data$SalePrice))
+library(ggplot2)
+ggplot(data = housing_data, mapping = aes(x = X1stFlrSF, y = YearBuilt, col = as.factor(SalePrice))) + geom_point() + labs(color = "SalePrice")
+ggplot(data = housing_data, mapping = aes(x = TotalBsmtSF, y = LotArea, col = as.factor(SalePrice))) + geom_point() + labs(color = "SalePrice")
+ggplot(data = housing_data, mapping = aes(x = Alley, y = GarageArea, col = as.factor(SalePrice))) + geom_point() + geom_jitter() + labs(color = "SalePrice")
+ggplot(data = housing_data, mapping = aes(x = GrLivArea, y = Neighborhood, col = as.factor(SalePrice))) + geom_point() + geom_jitter() + labs(color = "SalePrice")
+```
+
+Above we see very obvious relationships with the predictors and the response (indicated by the color of the points). This relationship, however, is not completely deterministic. As seen in the graphs, many housing price classes can coincide when only considering 2 predictors at a time (which is what we did). This might hint at KNN not being a great model choice since points of different housing price classes are often adjacent. Support Vector Machines seems like a reasonable guess for which will predict the best.
+
+#### Splitting the Data into a Training Set and a Test Set
+
+We initialize fold.index to assign a random integer in the interval [1,3] to each row of the data. If the integer assigned to a row is not 1, then it is put into the training set. If the integer assigned to a row is 1, it is put into the test set.
+
+```{r}
+set.seed(3)
+fold.index <- sample(1:3, size = length(housing_data$SalePrice), replace = TRUE)
+
+housing_df <- data.frame(modelmatrix[,-1])
+train <- housing_df[fold.index != 1,]
+test <- housing_df[fold.index == 1, ]
+```
+
+#### KNN
+
+We do KNN without standardizing the data, thus making numeric columns have a much larger impact over which is the nearest neighbor. This is roughly equivalent to simply not using the categorical data at all. The error rate is shown below. We anticipate this being bad, so we don't bother doing cross validation here. We just try all K from 1 to 30.
+
+```{r}
+library(class)
+set.seed(4)
+error_vector <- rep(0,30)
+for (i in 1:30){
+  pred_knn <- knn(train = train, test = test, cl = train$SalePrice, k = i)
+  error_vector[i] <- mean(pred_knn != housing_df$SalePrice[fold.index == 1])*100
+}
+df <- data.frame(K = 1:30, Error = error_vector)
+
+ggplot(data = df, mapping = aes(x = K, y = Error)) + geom_point() + geom_line()
+which.min(df$Error)
+df$Error[7]
+```
+
+36.38% error for KNN
+
+#### KNN Cross Validation
+
+We will now do KNN with standardized data so that the categorical variables have a more fair part in determining the nearest neighbor. In turn, our prediction gets much better. First we need to do cross validation on the training set to find the best K. We construct the standardized data frame and do cross validation on the training set below.
+
+```{r}
+set.seed(3)
+train_z <- scale(housing_df)[fold.index != 1,-283]
+test_z <- scale(housing_df)[fold.index == 1,-283]
+
+train_z <- data.frame(train_z, SalePrice = housing_df$SalePrice[fold.index != 1])
+test_z <- data.frame(test_z, SalePrice = housing_df$SalePrice[fold.index == 1])
+
+fold.index.cv <- sample(x = 1:5, size = nrow(train_z), replace = TRUE)
+
+error_vector <- rep(0,60)
+for (k in 1:60){
+  cv_error_vect <- rep(0,5)
+  for (i in 1:5){
+  knn_model <- knn(train = train_z[fold.index.cv != i,], test = train_z[fold.index.cv == i,], cl = train_z$SalePrice[fold.index.cv != i], k = k)
+  cv_error_vect[i] <- mean(knn_model != train_z$SalePrice[fold.index.cv == i])
+  }
+  error_vector[k] <- mean(cv_error_vect)
+}
+
+which.min(error_vector)
+error_vector[58]*100
+```
+
+We see that, by using cross validation on the training set, the best K is 58 and it had an error of 32.82%. This is not so bad especially considering the reduced sample size that comes with cross validation.
+
+#### KNN with Standardization
+
+Even though we did cross validation above and found the best K to be 58, we still try all K.
+
+```{r}
+error_vector <- rep(0,60)
+for (i in 1:60){
+  pred_knn <- knn(train = train_z[,], test = test_z[,], cl = train_z$SalePrice, k = i)
+  error_vector[i] <- mean(pred_knn != housing_df$SalePrice[fold.index == 1])*100
+}
+df <- data.frame(K = 1:60, Error = error_vector)
+
+ggplot(data = df, mapping = aes(x = K, y = Error)) + geom_point() + geom_line()
+which.min(df$Error)
+df$Error[39]
+```
+
+The lowest error we find 31.71% error for KNN with standardizing. We find it when K = 39 rather than 58 from cross validation.
+
+#### KNN (Using Manhattan Distance)
+
+We try a different distance metric to determine the nearest neighbors, we use the manhattan distance. This is allowed by the knnGarden package. We elect to not do cross validation for the best k here since the computation time would be on the order of 5 hours. We use the best K from before.
+
+```{r}
+library(knnGarden)
+
+set.seed(111)
+
+knn_manhat <- knnVCN(TrnX = train_z, OrigTrnG = train_z$SalePrice, TstX = test_z, K = 39, method = "manhattan")
+
+mean(knn_manhat != housing_df$SalePrice[fold.index == 1])*100
+```
+
+27.44% error for KNN with standardizing and using the Manhattan distance function
+
+#### Logistic 
+
+We also try a logistic regression. We have more than 2 classes, so we require the multinom function. The prediction isn't amazing, but it's still better than random guessing.
+
+```{r}
+library(glmnet)
+library(nnet)
+set.seed(23)
+multilog_reg <- multinom(formula = SalePrice ~ ., train, MaxNWts = 1136)
+pred_multilog <- predict(object = multilog_reg, newdata = test)
+
+mean(pred_multilog != housing_df$SalePrice[fold.index == 1])*100
+```
+
+36.79% error rate for Multi-log regression
+
+
+#### SVM (Support Vector Machine)
+
+We now try two SVM models with different kernels (linear & radial). 
+
+A Support Vector Machine (SVM) is a discriminative classifier formally defined by a separating hyperplane. In other words, given labeled training data (supervised learning), the algorithm outputs an optimal hyperplane which categorizes new examples. In two dimensional space this hyperplane is a line dividing a plane in two parts where in each class lay in either side. The svm function in R can also be used to predict quantitative data.
+
+It performs the best, slightly better than the Manhattan KNN.
+
+```{r}
+library(e1071)
+
+set.seed(41)
+
+svm_linear <- svm(as.factor(SalePrice) ~ ., housing_data[fold.index != 1,], kernel = "linear")
+
+pred_svm <- predict(object = svm_linear, newdata = housing_data[fold.index == 1,])
+
+mean(pred_svm != housing_df$SalePrice[fold.index == 1])*100
+```
+
+26.63% error rate for SVM (Linear)
+
+```{r}
+set.seed(221)
+
+svm_poly <- svm(as.factor(SalePrice) ~ ., housing_data[fold.index != 1,], kernel = "radial")
+
+pred_svm <- predict(object = svm_poly, newdata = housing_data[fold.index == 1,])
+
+mean(pred_svm != housing_df$SalePrice[fold.index == 1])*100
+```
+
+25.41% error rate for SVM (Radial)
+
+The SVM models end up performing the best as seen by their low error rates. The radial kernel did better than the linear kernel.

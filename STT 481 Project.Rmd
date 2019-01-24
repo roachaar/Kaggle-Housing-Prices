@@ -1,0 +1,757 @@
+---
+title: "STT 481 Midterm Project"
+author: "Aaron Roach"
+date: "November 7, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(leaps)
+library(glmnet)
+library(pls)
+library(FNN)
+```
+
+### Part 1: Preprocessing
+
+In this section, we get rid of the NA's from our data
+
+```{r, eval = TRUE, warning = FALSE}
+library(tidyverse)
+#####
+#####
+#####
+train <- read.csv("train.csv")
+test <- read.csv("test.csv")
+test[,81] <- rep(0, nrow(test))
+colnames(test)[81] <- "SalePrice"
+#####
+#####
+#####
+full <- rbind(train,test)
+
+ggplot(data = full[1:1460,], aes( x = MSSubClass, y = log(SalePrice))) + geom_point()
+ggplot(data = full[1:1460,], aes( x = MoSold, y = log(SalePrice))) + geom_point()
+ggplot(data = full[1:1460,], aes( x = YrSold, y = log(SalePrice))) + geom_point()
+full$MSSubClass <- as.factor(full$MSSubClass)
+full$MoSold <- as.factor(full$MoSold)
+full$YrSold <- as.factor(full$YrSold)
+
+colSums(is.na(full))[colSums(is.na(full)) != 0]
+# Changing GarageYrBlt a lot so we can make it a useful factor & fill NA's with none
+# use summary to choose classes
+summary(full$GarageYrBlt)
+full$GarageYrBlt[full$GarageYrBlt < 1960] <- 1
+full$GarageYrBlt[full$GarageYrBlt >= 1960 & full$GarageYrBlt < 1977] <- 2
+full$GarageYrBlt[full$GarageYrBlt >= 1977 & full$GarageYrBlt < 1995] <- 3
+full$GarageYrBlt[full$GarageYrBlt >= 1995] <- 4
+# 0 means none
+full$GarageYrBlt[is.na(full$GarageYrBlt)] <- 0
+
+full$GarageYrBlt <- as.factor(full$GarageYrBlt)
+
+# Now look at this gorgeous plot
+ggplot(data = full[1:1460,], aes( x = GarageYrBlt, y = log(SalePrice))) + geom_point()
+
+SalePrice <- train$SalePrice
+
+Id <- test$Id
+
+full[,c('Id','SalePrice')] <- NULL
+
+chr <- full[,which(sapply(full,is.integer)==FALSE)]
+
+int <- full[,sapply(full,is.integer)]
+
+dim(chr)
+dim(int)
+
+# Fixing Alley, NA means "No Alley" in this case
+chr$Alley <- as.character(chr$Alley)
+chr$Alley[is.na(chr$Alley)] <- "None"
+chr$Alley <- as.factor(chr$Alley)
+
+# Fixing MasVnrType, there are only 8 NA's here
+# the column is worth saving
+chr$MasVnrType <- as.character(chr$MasVnrType)
+chr$MasVnrType[is.na(chr$MasVnrType)] <- "None"
+chr$MasVnrType <- as.factor(chr$MasVnrType)
+# Fixing BsmtQual, NA means no basement
+chr$BsmtQual <- as.character(chr$BsmtQual)
+chr$BsmtQual[is.na(chr$BsmtQual)] <- "None"
+chr$BsmtQual <- as.factor(chr$BsmtQual)
+
+# Fixing BsmtCond, NA means no basement
+chr$BsmtCond <- as.character(chr$BsmtCond)
+chr$BsmtCond[is.na(chr$BsmtCond)] <- "None"
+chr$BsmtCond <- as.factor(chr$BsmtCond)
+
+# Fixing BsmtExposure, NA means no basement
+chr$BsmtExposure <- as.character(chr$BsmtExposure)
+chr$BsmtExposure[is.na(chr$BsmtExposure)] <- "None"
+chr$BsmtExposure <- as.factor(chr$BsmtExposure)
+
+# Fixing BsmtFinType1, NA means no basement
+chr$BsmtFinType1 <- as.character(chr$BsmtFinType1)
+chr$BsmtFinType1[is.na(chr$BsmtFinType1)] <- "None"
+chr$BsmtFinType1 <- as.factor(chr$BsmtFinType1)
+
+# Fixing BsmtFinType2, NA means no basement
+chr$BsmtFinType2 <- as.character(chr$BsmtFinType2)
+chr$BsmtFinType2[is.na(chr$BsmtFinType2)] <- "None"
+chr$BsmtFinType2 <- as.factor(chr$BsmtFinType2)
+
+# Fixing Electrical, there is only 1 NA here
+# the column is worth saving
+chr$Electrical <- as.character(chr$Electrical)
+chr$Electrical[is.na(chr$Electrical)] <- "SBrkr"
+chr$Electrical <- as.factor(chr$Electrical)
+
+# Fixing FireplaceQu, NA means no fireplace
+chr$FireplaceQu <- as.character(chr$FireplaceQu)
+chr$FireplaceQu[is.na(chr$FireplaceQu)] <- "None"
+chr$FireplaceQu <- as.factor(chr$FireplaceQu)
+
+# Fixing GarageType, NA means no garage
+chr$GarageType <- as.character(chr$GarageType)
+chr$GarageType[is.na(chr$GarageType)] <- "None"
+chr$GarageType <- as.factor(chr$GarageType)
+# Fixing GarageFinish, NA means no garage
+chr$GarageFinish <- as.character(chr$GarageFinish)
+chr$GarageFinish[is.na(chr$GarageFinish)] <- "None"
+chr$GarageFinish <- as.factor(chr$GarageFinish)
+
+# Fixing GarageQual, NA means no garage
+chr$GarageQual <- as.character(chr$GarageQual)
+chr$GarageQual[is.na(chr$GarageQual)] <- "None"
+chr$GarageQual <- as.factor(chr$GarageQual)
+
+# Fixing GarageCond, NA means no garage
+chr$GarageCond <- as.character(chr$GarageCond)
+chr$GarageCond[is.na(chr$GarageCond)] <- "None"
+chr$GarageCond <- as.factor(chr$GarageCond)
+
+# Fixing PoolQC, NA means no pool
+chr$PoolQC <- as.character(chr$PoolQC)
+chr$PoolQC[is.na(chr$PoolQC)] <- "None"
+chr$PoolQC <- as.factor(chr$PoolQC)
+
+# Fixing Fence, NA means no fence
+chr$Fence <- as.character(chr$Fence)
+chr$Fence[is.na(chr$Fence)] <- "None"
+chr$Fence <- as.factor(chr$Fence)
+
+# MiscFeature, NA means None
+chr$MiscFeature <- as.character(chr$MiscFeature)
+chr$MiscFeature[is.na(chr$MiscFeature)] <- "None"
+chr$MiscFeature <- as.factor(chr$MiscFeature)
+########
+
+### Fixing the leftover NA's:
+# KitchenQual, NA means TA (Guess)
+chr$KitchenQual <- as.character(chr$KitchenQual)
+chr$KitchenQual[is.na(chr$KitchenQual)] <- "TA"
+chr$KitchenQual <- as.factor(chr$KitchenQual)
+
+# MSZoning, rows are 456, 757, 791, 1445
+# I think it is reasonable to say Street = Gravel => MSZoning = A (456)
+# Street = Pave => MSZoning = RM (757 & 791 & RM)
+chr$MSZoning <- as.character(chr$MSZoning)
+chr$MSZoning[is.na(chr$MSZoning)] <- "RL"
+chr$MSZoning <- as.factor(chr$MSZoning)
+
+# Utilities, NA means no utilities (guess), we default to NoSeWa 
+# because this seems closest to no utilities (minimal utilities)
+# chr$Utilities <- as.character(chr$Utilities)
+# chr$Utilities[is.na(chr$Utilities)] <- "NoSeWa"
+# chr$Utilities <- as.factor(chr$Utilities)
+# After further investigation, literally every row of train
+# has Utilities = Pub, every row except the NA's have Utilities = Pub
+# So we are just going to drop Utilities from the train & chr
+# But I am having trouble doing that, I tried:
+# chr <- chr[,-8]
+# train <- train[,-8]
+# but this causes later issues with the regression
+# So I will settle with this for now:
+chr$Utilities <- as.character(chr$Utilities)
+chr$Utilities[is.na(chr$Utilities)] <- "AllPub"
+chr$Utilities <- as.factor(chr$Utilities)
+# Exterior2nd, NA might mean VinylSd (guess)
+# Same motivation: which.max(summary(train$Exterior2nd))
+chr$Exterior2nd <- as.character(chr$Exterior2nd)
+chr$Exterior2nd[is.na(chr$Exterior2nd)] <- "VinylSd"
+chr$Exterior2nd <- as.factor(chr$Exterior2nd)
+
+# Functional, NA might mean Typ (guess, most common again)
+chr$Functional <- as.character(chr$Functional)
+chr$Functional[is.na(chr$Functional)] <- "Typ"
+chr$Functional <- as.factor(chr$Functional)
+
+# SaleType, NA might mean WD (guess)
+chr$SaleType <- as.character(chr$SaleType)
+chr$SaleType[is.na(chr$SaleType)] <- "WD"
+chr$SaleType <- as.factor(chr$SaleType)
+
+# Exterior1st, NA might mean VinylSd (guess)
+# Motivation: which.max(summary(train$Exterior1st))
+# VinylSd is #13
+chr$Exterior1st <- as.character(chr$Exterior1st)
+chr$Exterior1st[is.na(chr$Exterior1st)] <- "VinylSd"
+chr$Exterior1st <- as.factor(chr$Exterior1st)
+
+####
+# all NA's are gone here
+sum(is.na(chr))
+
+### Things that should be zero in the int dataframe:
+########
+int$MasVnrArea <- as.character(int$MasVnrArea)
+int$MasVnrArea[is.na(int$MasVnrArea)] <- 0
+int$MasVnrArea <- as.double(int$MasVnrArea)
+
+int$BsmtFullBath[chr$BsmtFinType1 == "None"]
+# BsmtFinSF1, NA might mean 0 (guess)
+int$BsmtFinSF1 <- as.character(int$BsmtFinSF1)
+int$BsmtFinSF1[is.na(int$BsmtFinSF1)] <- "0"
+int$BsmtFinSF1 <- as.double(int$BsmtFinSF1)
+
+# BsmtFinSF2, NA might mean 0 (guess)
+int$BsmtFinSF2 <- as.character(int$BsmtFinSF2)
+int$BsmtFinSF2[is.na(int$BsmtFinSF2)] <- "0"
+int$BsmtFinSF2 <- as.double(int$BsmtFinSF2)
+
+# BsmtUnfSF, NA might mean 0 (guess)
+int$BsmtUnfSF <- as.character(int$BsmtUnfSF)
+int$BsmtUnfSF[is.na(int$BsmtUnfSF)] <- "0"
+int$BsmtUnfSF <- as.double(int$BsmtUnfSF)
+
+# TotalBsmtSF, NA might mean 0 (guess)
+int$TotalBsmtSF <- as.character(int$TotalBsmtSF)
+int$TotalBsmtSF[is.na(int$TotalBsmtSF)] <- "0"
+int$TotalBsmtSF <- as.double(int$TotalBsmtSF)
+
+# BsmtFullBath, NA might mean 0 (guess)
+int$BsmtFullBath <- as.character(int$BsmtFullBath)
+int$BsmtFullBath[is.na(int$BsmtFullBath)] <- "0"
+int$BsmtFullBath <- as.double(int$BsmtFullBath)
+
+# BsmtHalfBath, NA might mean 0 (guess)
+int$BsmtHalfBath <- as.character(int$BsmtHalfBath)
+int$BsmtHalfBath[is.na(int$BsmtHalfBath)] <- "0"
+int$BsmtHalfBath <- as.double(int$BsmtHalfBath)
+
+# GarageCars should be 0 since:
+# int$GarageFinish[is.na(int$GarageCars)]
+int$GarageCars <- as.character(int$GarageCars)
+int$GarageCars[is.na(int$GarageCars)] <- "0"
+int$GarageCars <- as.double(int$GarageCars)
+
+# GarageArea
+int$GarageArea <- as.character(int$GarageArea)
+int$GarageArea[is.na(int$GarageArea)] <- "0"
+int$GarageArea <- as.double(int$GarageArea)
+
+sum(is.na(int))
+
+# LotFrontage
+# Store as median since nothing else greatly improves results
+median_LotFrontage <- median(int$LotFrontage, na.rm = TRUE)
+int$LotFrontage <- as.character(int$LotFrontage)
+int$LotFrontage[is.na(int$LotFrontage)] <- median_LotFrontage
+int$LotFrontage <- as.double(int$LotFrontage)
+
+##########
+
+colSums(is.na(int))
+
+# use mice to fill in rest of missing data
+#library(mice)
+
+full <- data.frame(chr,int)
+
+#micemod <- full %>% mice(method='rf')
+
+#full <- complete(micemod)
+
+train <- full[1:1460,]
+train[,"SalePrice"] <- SalePrice
+test <- full[1461:2919,]
+full[,"SalePrice"] <- c(SalePrice, rep(0,1459))
+
+full_df <- full
+full_mm <- model.matrix(SalePrice ~ ., data = full)
+full_mm <- full_mm
+full_df_num <- as.data.frame(full_mm)
+
+train_num <- full_df_num[1:1460,]
+test_num <- full_df_num[1461:2919,]
+
+# It is important to note the distribution of SalePrice:
+# not normally distributed
+ggplot(data = full_df_num[1:1460,], aes( x = SalePrice)) + geom_histogram(binwidth = 20000)
+# normally distributed
+ggplot(data = full_df_num[1:1460,], aes( x = log(SalePrice))) + geom_histogram(bins = 25)
+### 
+# based on the above two plots, I think it is better to predict the log of SalePrice since it is normally distributed
+```
+
+### Part 2: Linear Regression
+
+```{r, warning = FALSE}
+#####
+# Fit the linear model
+# 0.14619 without outliers removed
+# GrLivArea > 4500 but price very low, so we remove 2 points
+# 0.13988 with outliers removed
+# 0.13859 with outliers removed AND using log(LotArea)
+#####
+
+# The first plot shown below indicates 2 outliers with very high GrLivArea, but low SalePrice
+# The second plot indicates a linear relationship exists between the log(LotArea) and the log(SalePrice)
+ggplot(train_num, aes(x = GrLivArea, y = log(SalePrice))) + geom_point()
+ggplot(train_num, aes(x = log(LotArea), y = log(SalePrice))) + geom_point()
+
+train_df <- full_df_num[1:1460,-1]
+test_df <- full_df_num[1461:2919,-1]
+
+# Which points to remove
+which(train_num$GrLivArea > 4500)
+
+fit_lm <- lm(log(SalePrice)[-c(524,1299)] ~ . -LotArea + log(LotArea) ,
+             data = train_df[-c(524,1299),])
+prediction_lm <- predict(object = fit_lm, newdata = test_df)
+prediction_lm <- data.frame("Id" = 1461:2919, "SalePrice" = exp(prediction_lm))
+# write.csv(x = prediction_lm, file = "prediction_lm1.csv", row.names = FALSE)
+#####
+# Very High R^2 value
+summary(fit_lm)
+
+# Which coefficients are significant, over 60 of them!
+names(which(summary(fit_lm)$coefficients[,4]<0.05))
+# Which coefficients are significant under alpha level of 0.15 (generous alpha level)
+# approximately 100
+names(which(summary(fit_lm)$coefficients[,4]<0.15))
+
+# What are the most significant predictors and their coefficients?
+summary(fit_lm)$coefficients[,1][which(summary(fit_lm)$coefficients[,4]<0.000000001)]
+ggplot(train_num, aes(x = OverallQual, y = log(SalePrice))) + geom_point()
+ggplot(train_num, aes(x = X1stFlrSF, y = log(SalePrice))) + geom_point()
+ggplot(train_num, aes(x = ScreenPorch, y = log(SalePrice))) + geom_point()
+
+# let's look at the plots
+par(mfrow = c(2,2))
+plot(fit_lm)
+#####
+```
+
+### Part 3: Subset Selection
+
+In this section, we use regsubset.
+
+```{r}
+#####
+# Note, the next chunk takes a long time to code, so I took out this function from it
+# and am running this chunk because I will need this function in Part 6
+#####
+# creating the predict.regsubsets function to make predictions with
+predict.regsubsets <- function(object, newdata, id, ...){
+  form <- as.formula(object$call[[2]])
+  mat <- model.matrix(form,newdata)
+  coef <- coef(object, id = id)
+  xvars <- names(coef)
+  return(mat[,xvars] %*% coef)
+}
+```
+
+```{r, warning = FALSE, eval = TRUE}
+##########
+# Disclaimer: Please be aware that this code takes a significant amount of time to run
+##########
+#####
+# creating dataframe from previous model matrix, split into train and test part
+# the same columns from before are removed
+data.regsubset <- data.frame(full_mm)[1:1460,-1]
+test.regsubset <- data.frame(full_mm)[1460:2919,-1]
+#####
+# from here and on in this chunk, we just closely mirror the code from the
+# homework with our information filled in
+# FWD
+regfit.fwd <- regsubsets(log(SalePrice[1:1460]) ~ ., 
+                          data = data.regsubset, nvmax = 267, really.big = TRUE, method = "forward")
+# create reg.summary as in the hw
+reg.summary <- summary(regfit.fwd)
+
+# plot important graphs that show significant models
+par(mfrow = c(2,2))
+
+plot(reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+
+plot(reg.summary$adjr2 ,xlab="Number of Variables ",ylab="Adjusted RSq",type="l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], col = "red", cex = 2, pch = 20)
+
+plot(reg.summary$cp,xlab ="Number of Variables ",ylab ="Cp",type ="l")
+points(which.min(reg.summary$cp), reg.summary$cp[which.min(reg.summary$cp)], col = "red", cex = 2, pch = 20)
+
+plot(reg.summary$bic,xlab ="Number of Variables ",ylab ="BIC",type ="l")
+points(which.min(reg.summary$bic), reg.summary$bic[which.min(reg.summary$bic)], col = "red", cex = 2, pch = 20)
+
+which.min(reg.summary$cp)
+which.min(reg.summary$bic)
+# fwd fit before CV
+# 0.14628
+# min cp
+fwd_fit <- predict.regsubsets(regfit.fwd, test.regsubset, 105)
+fwd_fit <- exp(fwd_fit)
+fwd_fit_df <- data.frame(Id = 1460:2919, SalePrice = fwd_fit[,1])
+fwd_fit_df <- fwd_fit_df[-1,]
+# write.csv(x = fwd_fit_df, file = "prediction_fwd_cp.csv", row.names = FALSE)
+
+#####
+# BWD
+regfit.bwd <- regsubsets(log(SalePrice[1:1460]) ~ ., 
+                         data = data.regsubset, nvmax = 267, really.big = TRUE, method = "backward")
+reg.summary <- summary(regfit.bwd)
+
+par(mfrow = c(2,2))
+
+plot(reg.summary$rss, xlab = "Number of Variables", ylab = "RSS", type = "l")
+
+plot(reg.summary$adjr2 ,xlab="Number of Variables ",ylab="Adjusted RSq",type="l")
+points(which.max(reg.summary$adjr2), reg.summary$adjr2[which.max(reg.summary$adjr2)], col = "red", cex = 2, pch = 20)
+
+plot(reg.summary$cp,xlab ="Number of Variables ",ylab ="Cp",type ="l")
+points(which.min(reg.summary$cp), reg.summary$cp[which.min(reg.summary$cp)], col = "red", cex = 2, pch = 20)
+
+plot(reg.summary$bic,xlab ="Number of Variables ",ylab ="BIC",type ="l")
+points(which.min(reg.summary$bic), reg.summary$bic[which.min(reg.summary$bic)], col = "red", cex = 2, pch = 20)
+
+which.min(reg.summary$cp)
+which.min(reg.summary$bic)
+# bwd fit before CV
+# 0.14548
+# min cp
+bwd_fit <- predict.regsubsets(regfit.bwd, test.regsubset, 63)
+bwd_fit <- exp(bwd_fit)
+bwd_fit_df <- data.frame(Id = 1460:2919, SalePrice = bwd_fit[,1])
+bwd_fit_df <- bwd_fit_df[-1,]
+# write.csv(x = bwd_fit_df, file = "prediction_bwd_bic.csv", row.names = FALSE)
+
+#####
+# Mix code is omitted because it did not perform extremely well and the computation time isn't worth the results it is giving.
+```
+
+### Part 4: Shrinkage Methods
+
+In this section, we use ridge and lasso.
+
+```{r, warning = FALSE}
+# Ridge coding
+# this closely mirrors code from the homework assignment
+X <- full_mm[1:1460,-1]
+y <- log(SalePrice[1:1460])
+ridge_housing <- glmnet(x = X, y = y, alpha = 0)
+cv_ridge_housing <- cv.glmnet(X,y, alpha  = 0, nfolds = 10)
+bestlam <- cv_ridge_housing$lambda.min
+# coef(ridge_housing, s = bestlam)
+
+test.X <- full_mm[1461:2919,-1]
+ridge_pred_housing <- predict(ridge_housing, s = bestlam, newx = test.X)
+ridge_pred_housing <- exp(ridge_pred_housing)
+
+
+# Ridge Prediction
+# 0.14434
+ridge_fit_df <- data.frame(Id = 1461:2919, SalePrice = ridge_pred_housing[,1])
+# write.csv(x = ridge_fit_df, file = "prediction_ridge.csv", row.names = FALSE)
+
+# Lasso coding
+lasso_housing <- glmnet(x = X, y = y, alpha = 1)
+cv_lasso_housing <- cv.glmnet(X,y, alpha  = 1, nfolds = 10)
+bestlam <- cv_lasso_housing$lambda.min
+# coef(lasso_housing, s = bestlam)
+
+lasso_pred_housing <- predict(lasso_housing, s = bestlam, newx = test.X)
+lasso_pred_housing <- exp(lasso_pred_housing)
+
+# Lasso Prediction
+# 0.12912
+lasso_fit_df <- data.frame(Id = 1461:2919, SalePrice = lasso_pred_housing[,1])
+# write.csv(x = lasso_fit_df, file = "prediction_lasso.csv", row.names = FALSE)
+```
+
+### Part 5: Dimension Reduction Methods
+
+In this section, we use dimension reduction methods to make predictions.
+The scale is set to FALSE in the fit functions used.
+
+```{r, warning = FALSE}
+#####
+# Following code example from the notes
+# first make data frame
+pcr_data_final <- full_df_num
+# we store SalePrice info this dataframe using our initial dataframe
+pcr_data_final[,"SalePrice"] <- c(SalePrice,rep(0,1459))
+pcr_fit_final <- pcr(log(SalePrice) ~ . - LotArea + log(LotArea), data = pcr_data_final[1:1460,], scale = FALSE, validation = "CV")
+pcr_cv_rmse <- RMSEP(pcr_fit_final)
+pcr_cv_rmse$val[1,1,]
+which.min(pcr_cv_rmse$val[1,1,-1])
+# Validation plot not pretty or revealing
+# validationplot(pcr_fit_final, val.type = "MSEP")
+plot_pcr <- pcr_cv_rmse$val[1,1,][1:261]
+ggplot(mapping = aes( x = 1:261, y = plot_pcr)) + geom_point(col = "darkblue")+geom_line() + labs( x = "Number of Comps", y = "MSEP")
+# PCR Prediction finally got it to work thanks to help from Dr. Sung (scale = FALSE)
+# 0.12415
+pcr_pred_final <- predict(pcr_fit_final, newdata = pcr_data_final[1461:2919,], ncomp = which.min(pcr_cv_rmse$val[1,1,-1]))
+pcr_pred_final_df <- data.frame(Id = 1461:2919, SalePrice = exp(pcr_pred_final))
+colnames(pcr_pred_final_df) <- c("Id", "SalePrice")
+# write.csv(x = pcr_pred_final_df, file = "prediction_pcr.csv", row.names = FALSE)
+##########
+##########
+
+# now trying pls
+# Just change all instances of pcr above to pls and copy the code, using the plsr function
+pls_data_final <- full_df_num
+pls_data_final[,"SalePrice"] <- c(SalePrice, rep(0,1459))
+pls_fit_final <- plsr(log(SalePrice) ~ ., data = pls_data_final[1:1460,], scale = FALSE, validation = "CV")
+pls_cv_rmse <- RMSEP(pls_fit_final)
+pls_cv_rmse$val[1,1,]
+which.min(pls_cv_rmse$val[1,1,-1])
+validationplot(pls_fit_final, val.type = "MSEP")
+###
+# pls prediction found below:
+# 0.12393
+pls_pred_final <- predict(pls_fit_final, newdata = pls_data_final[1461:2919,], ncomp = which.min(pls_cv_rmse$val[1,1,-1]))
+pls_pred_final_df <- data.frame(Id = 1461:2919, SalePrice = exp(pls_pred_final))
+colnames(pls_pred_final_df) <- c("Id", "SalePrice")
+# write.csv(x = pls_pred_final_df, file = "prediction_pls.csv", row.names = FALSE)
+
+#####
+# Special Note:
+# I took the average of the pcr and pls prediction outside of R
+# and got an even better result:
+# 0.12338
+# This is my best result as of now
+# "Wisdom of the Crowd" ???
+#####
+```
+
+### Part 6: Estimated Test Errors (CV Estimate)
+
+In this section, we use CV to find out which method should be used assuming we
+don't have the ability to compute actual test error again and again.
+Cross validation choose pls, which was in fact the best model we tried!
+
+```{r, warning = FALSE}
+# set seed to get consistent results
+set.seed(6)
+# isolate training data to perform cv
+cv_df <- pls_data_final[1:1460,]
+# randomly split into 10 sets to perform cv
+fold.index <- cut(sample(1:nrow(cv_df)), breaks=10, labels=FALSE)
+
+# Form the error vectors we will be using later
+test_error_lm <- rep(0, 10)
+test_error_fwd_cp <- rep(0, 10)
+test_error_fwd_bic <- rep(0, 10)
+test_error_bwd_cp <- rep(0,10)
+test_error_bwd_bic <- rep(0, 10)
+test_error_ridge <- rep(0,10)
+test_error_lasso <- rep(0,10)
+test_error_pcr <- rep(0,10)
+test_error_pls <- rep(0,10)
+
+# used for ridge and lasso since we need model matrices
+# same as before
+
+
+# create a for loop as in the homework
+# testing each fold.index and forming a vector of RMSE of the log of SalePrice
+for (i in 1:10){
+  # fit each of 9 models here, names are self explanatory
+  fit_lm <- lm(log(SalePrice) ~ ., data = cv_df[!(fold.index == i),])
+  fit_fwd <- regsubsets(log(SalePrice) ~ ., 
+                        data = cv_df[!(fold.index == i), ], nvmax = 250, really.big = TRUE, method = "forward")
+  fit_bwd <- regsubsets(log(SalePrice) ~ ., 
+                        data = cv_df[!(fold.index == i), ], nvmax = 250, really.big = TRUE, method = "backward")
+  fit_ridge <- glmnet(x = X[!(fold.index == i),], y = y[!(fold.index==i)], alpha = 0)
+  cv_ridge <- cv.glmnet(X[!(fold.index == i),],y[!(fold.index == i)], alpha  = 0, nfolds = 10)
+  bestlam_ridge <- cv_ridge$lambda.min
+  fit_lasso <- glmnet(x = X[!(fold.index == i),], y = y[!(fold.index==i)], alpha = 1)
+  cv_lasso <- cv.glmnet(X[!(fold.index == i),],y[!(fold.index == i)], alpha  = 1, nfolds = 10)
+  bestlam_lasso <- cv_lasso$lambda.min
+  fit_pcr <- pcr(log(SalePrice) ~ ., data = cv_df[!(fold.index == i),], scale = FALSE, validation = "CV")
+  cv_pcr <- RMSEP(fit_pcr)
+  fit_pls <- plsr(log(SalePrice) ~ ., data = cv_df[!(fold.index == i),], scale = FALSE, validation = "CV")
+  cv_pls <- RMSEP(fit_pls)
+  # make 9 predictions, very clear names again
+  pred_lm <- predict(fit_lm, cv_df[fold.index == i,])
+  pred_fwd_cp <- predict.regsubsets(fit_fwd, cv_df[fold.index == i,], which.min(summary(fit_fwd)$cp))
+  pred_fwd_bic <- predict.regsubsets(fit_fwd, cv_df[fold.index == i,], which.min(summary(fit_fwd)$bic))
+  pred_bwd_cp<- predict.regsubsets(fit_bwd, cv_df[fold.index == i,], which.min(summary(fit_fwd)$cp))
+  pred_bwd_bic <- predict.regsubsets(fit_bwd, cv_df[fold.index == i,], which.min(summary(fit_fwd)$bic))
+  pred_ridge <- predict(fit_ridge, s = bestlam_ridge, newx = X[fold.index == i,]) 
+  pred_lasso <- predict(fit_lasso, s = bestlam_lasso, newx = X[fold.index == i,]) 
+  pred_pcr <- predict(fit_pcr, newdata = cv_df[fold.index == i,], ncomp = which.min(cv_pcr$val[1,1,-1]))
+  pred_pls <- predict(fit_pls, newdata = cv_df[fold.index == i,], ncomp = which.min(cv_pls$val[1,1,-1]))
+  # the next line is the vector we are testing against
+  cv_test <- log(cv_df[fold.index==i,]$SalePrice)
+  # now we calculate errors for each prediction
+  error_lm <- sqrt(mean((cv_test-pred_lm)^2))
+  error_fwd_cp <- sqrt(mean((cv_test-pred_fwd_cp)^2))
+  error_fwd_bic <- sqrt(mean((cv_test-pred_fwd_bic)^2))
+  error_bwd_cp <- sqrt(mean((cv_test-pred_bwd_cp)^2))
+  error_bwd_bic <- sqrt(mean((cv_test-pred_bwd_bic)^2))
+  error_ridge <- sqrt(mean((cv_test-pred_ridge)^2))
+  error_lasso <- sqrt(mean((cv_test-pred_lasso)^2))
+  error_pcr <- sqrt(mean((cv_test-pred_pcr)^2))
+  error_pls <- sqrt(mean((cv_test-pred_pls)^2))
+  # then we store each of the errors as the ith coordinate of our error vector
+  test_error_lm[i] <- error_lm
+  test_error_fwd_cp[i] <- error_fwd_cp
+  test_error_fwd_bic[i] <- error_fwd_bic
+  test_error_bwd_cp[i] <- error_bwd_cp
+  test_error_bwd_bic[i] <- error_bwd_bic
+  test_error_ridge[i] <- error_ridge
+  test_error_lasso[i] <- error_lasso
+  test_error_pcr[i] <- error_pcr
+  test_error_pls[i] <- error_pls
+  
+}
+# we create a nice pretty vector with names showing each mean test error
+result_vector <- c("lm" = mean(test_error_lm), "fwd_cp" = mean(test_error_fwd_cp), "fwd_bic" = mean(test_error_fwd_bic),
+                   "bwd_cp" = mean(test_error_bwd_cp), "bwd_bic" = mean(test_error_bwd_bic), "ridge" = mean(test_error_ridge),
+                   "lasso" = mean(test_error_lasso), "pcr" = mean(test_error_pcr), "pls" = mean(test_error_pls))
+result_vector
+# pls is the best
+which.min(result_vector)
+# Go with the pls model!
+```
+
+### Part 7: KNN Method
+
+In this section, we use the FNN library to do KNN regression with the data.
+
+```{r, warning = FALSE}
+# using the pls_data_final data frame since I've already made it
+knn_df <- pls_data_final
+knn_train_df <- knn_df[1:1460,]
+# put SalePrice in the training portion since we need it to make predictions
+knn_train_df[,"SalePrice"] <- log(SalePrice[1:1460])
+knn_test_df <- knn_df[1461:2919,-291]
+# k = 50
+# 0.21973
+knn_pred <- knn.reg(train = knn_train_df[,-291], test = knn_test_df, y = knn_train_df[,291], k = 50)
+knn_pred_df <- data.frame("Id" = 1461:2919, "SalePrice" = exp(knn_pred$pred))
+# write.csv(x = knn_pred_df, file = "prediction_knn50.csv", row.names = FALSE)
+
+
+# Just changing k = 3 in an attempt to stop the categorical Z-scores from taking over
+# 0.21083
+knn_pred <- knn.reg(train = knn_train_df[,-291], test = knn_test_df, y = knn_train_df[,291], k = 3)
+knn_pred_df <- data.frame("Id" = 1461:2919, "SalePrice" = exp(knn_pred$pred))
+# write.csv(x = knn_pred_df, file = "prediction_knn3.csv", row.names = FALSE)
+
+# standardize the dataframe
+tiny_columns <- which(colSums(pls_data_final)<200)
+knn_df[,tiny_columns] <- 0
+knn_df <- scale(pls_data_final)
+# Divide Factor columns by sqrt(number of levels) to not have determine the nearest neighbors alone
+knn_df[,1:13] <- knn_df[,1:13]/sqrt(13)
+knn_df[,14:17] <- knn_df[,14:17]/sqrt(4)
+knn_df[,21:22] <- knn_df[,21:22]/sqrt(2)
+knn_df[,23:25] <- knn_df[,23:25]/sqrt(3)
+knn_df[,26:28] <- knn_df[,26:28]/sqrt(3)
+knn_df[,30:33] <- knn_df[,30:33]/sqrt(4)
+knn_df[,34:35] <- knn_df[,34:35]/sqrt(2)
+knn_df[,36:59] <- knn_df[,36:59]/sqrt(24)
+knn_df[,60:67] <- knn_df[,60:67]/sqrt(8)
+knn_df[,68:74] <- knn_df[,68:74]/sqrt(7)
+knn_df[,75:77] <- knn_df[,75:77]/sqrt(3)
+knn_df[,78:84] <- knn_df[,78:84]/sqrt(7)
+knn_df[,89:93] <- knn_df[,89:93]/sqrt(5)
+knn_df[,94:100] <- knn_df[,94:100]/sqrt(7)
+knn_df[,101:114] <- knn_df[,101:114]/sqrt(14)
+knn_df[,115:128] <- knn_df[,115:128]/sqrt(14)
+knn_df[,129:131] <- knn_df[,129:131]/sqrt(3)
+knn_df[,133:139] <- knn_df[,133:139]/sqrt(7)
+knn_df[,140:144] <- knn_df[,140:144]/sqrt(5)
+knn_df[,145:148] <- knn_df[,145:148]/sqrt(4)
+knn_df[,149:151] <- knn_df[,149:151]/sqrt(3)
+knn_df[,152:155] <- knn_df[,152:155]/sqrt(4)
+knn_df[,156:160] <- knn_df[,156:160]/sqrt(5)
+knn_df[,162:167] <- knn_df[,162:167]/sqrt(6)
+knn_df[,170:178] <- knn_df[,170:178]/sqrt(9)
+knn_df[,180:183] <- knn_df[,180:183]/sqrt(4)
+knn_df[,193:195] <- knn_df[,193:195]/sqrt(3)
+knn_df[,197:202] <- knn_df[,197:202]/sqrt(6)
+knn_df[,204:208] <- knn_df[,204:208]/sqrt(5)
+knn_df[,209:214] <- knn_df[,209:214]/sqrt(6)
+knn_df[,216:217] <- knn_df[,216:217]/sqrt(2)
+knn_df[,220:223] <- knn_df[,220:223]/sqrt(4)
+knn_df[,224:227] <- knn_df[,224:227]/sqrt(4)
+knn_df[,228:229] <- knn_df[,228:229]/sqrt(2)
+knn_df[,241:242] <- knn_df[,241:242]/sqrt(2)
+knn_df[,243:246] <- knn_df[,243:246]/sqrt(4)
+knn_df[,250:257] <- knn_df[,250:257]/sqrt(3)
+
+# training portion
+knn_train_df <- knn_df[1:1460,-1]
+# put SalePrice in the training portion since we need it to make predictions
+knn_train_df[,"SalePrice"] <- log(SalePrice[1:1460])
+# get rid of the column of of the test dataframe since it contains
+# nonsense values (SalePrices of 0 which give ugly corresponding Z-scores)
+knn_test_df <- knn_df[1461:2919,-1]
+# run the knn.reg function from FNN
+knn_pred <- knn.reg(train = knn_train_df[,-290], test = knn_test_df[,-290], y = knn_train_df[,290], k = 10)
+knn_pred_df <- data.frame("Id" = 1461:2919, "SalePrice" = exp(knn_pred$pred))
+# write.csv(x = knn_pred_df, file = "prediction_knn10.csv", row.names = FALSE)
+
+# I don't like this model without adjusting the categorical columns because it gives a lot of 
+# weight to categorical variables by standardizing.
+# Some variables are strongly associated like how TotalBsmtSF is the sum of
+# other 'BsmtSF' variables, etc
+
+# the real problem could be that since factors are split up into a lot of variables in the model matrix,
+# predictors like MSSubClass who split into numerous factors could be having many times the impact that
+# a numerical predictor like X1stFlrSF
+```
+
+
+```{r}
+library(e1071)
+
+svr_fit <- svm(log(SalePrice) ~ ., data = full_df_num[1:1460,-c(1,13)])
+svr_pred <- predict(object = svr_fit, newdata = full_df_num[1461:2919,-c(1,13)])
+
+svr_pred_df <- data.frame("Id" = 1461:2919, "SalePrice" = exp(svr_pred))
+
+#write.csv(x = svr_pred_df, file = "prediction_svr.csv", row.names = FALSE)
+```
+
+```{r}
+#### Average SVR and PLS
+
+#new_pred <- (pls_pred_final_df + svr_pred_df + svr_pred_df)/3
+
+#write.csv(x = new_pred, file = "prediction_pls_svr_svr.csv", row.names = FALSE)
+
+
+# Our best predictions came from taking the average of numerous models
+# The models came from 3 different sets of cleaned data, all cleaned in different ways
+# The models used to average were PLS and SVM since they were the best
+# In the first avg_pred_df below, the most naive weights were chosen: all 1/3
+# In the second, the weights were chosen based on individual model accuracy
+
+# 0.11900
+#avg_pred_df <- data.frame("Id" = 1461:2919, "SalePrice" = exp((pls_pred_final + svr_pred + pred.svm)/3))
+#write.csv(x = avg_pred_df, file = "avg_pred2.csv", row.names = FALSE)
+
+# 0.11778
+#avg_pred_df3 <- data.frame("Id" = 1461:2919, "SalePrice" = exp((pls_pred_final + pred.svm + svm_pred + pred.svm + svm_pred + pred.svm)/6))
+#write.csv(x = avg_pred_df3, file = "avg_pred3.csv", row.names = FALSE)
+```
+
+
+
